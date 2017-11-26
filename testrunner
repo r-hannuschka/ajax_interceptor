@@ -1,0 +1,69 @@
+#!/bin/bash
+
+declare DIR='./tests';
+declare FIND_PATTERN="-name *.spec.js";
+declare -a FILES;
+declare -a FILE_LIST;
+
+function join {
+    local IFS="$1"; 
+    shift;
+    echo "$*";
+}
+
+# read in passed arguments to search files in a directory
+# valid arguments are
+# --dir for a directory should start with tests/[DIRNAME]
+# --name pattern for find like *.spec.js 
+while [[ $# > 0 ]] && [[ "$1" = --* ]];
+do
+  option=$1;
+  shift;
+  case "$option" in 
+    "--")
+        break 2 ;;
+
+    "--dir") 
+        # check it is a valid directory 
+        if [ -d "$DIR/$1" ]; 
+        then 
+            DIR="$DIR/$1"; 
+        fi; shift;;
+
+    "--name") 
+        FILES=("${FILES[@]}" "$1");
+        shift;;
+  esac;    
+done;
+
+# check if more as one extension is given for this
+# if this the case set iname argument for find argument
+# to search for multiple extensions
+if [ ${#FILES[@]} -gt 0 ]
+then
+    FIND_PATTERN="-name ${FILES[0]}";
+    if [ ${#FILES[@]} -gt 1 ] 
+    then
+        printf -v FIND_PATTERN " -iname %s -o " "${FILES[@]}";
+        FIND_PATTERN=${FIND_PATTERN%-*};
+    fi;
+fi;
+
+# search for all files and loop them 
+# and create a json formated object for karma to load 
+# all the matched files
+while IFS= read -d $'\0' -r FILE ; do
+  FILE_LIST[i++]="$(printf '{"pattern": "%s", "included": true}' "$FILE")";
+done < <(find "$DIR" -type f \( $FIND_PATTERN \) -print0);
+
+# finally export files as string concatenaded with a pipe symbol
+# as nodejs environemnt variable and run karma to start the tests
+# for the matched files
+if [ ${#FILE_LIST[@]} -gt 0 ]
+then
+  FILES=$(join \| "${FILE_LIST[@]}" );
+  export TESTFILES=$FILES;
+  karma start --single-run
+else
+  echo "es wurden keine Dateien gefunden";
+fi
